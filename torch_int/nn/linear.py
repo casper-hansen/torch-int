@@ -12,8 +12,6 @@ from ..functional.quantization import (
     fake_quantize_activation_per_token_absmax,
 )
 
-# opt中 fc2, out: W8A8BFP32OFP32Linear, q, k, v: W8A8B8O8Linear, fc1: W8A8B8O8LinearReLU
-
 class W8A8B8O8Linear(torch.nn.Module):
     # For qkv_proj
     def __init__(self, in_features, out_features, alpha=1.0, beta=1.0):
@@ -48,7 +46,6 @@ class W8A8B8O8Linear(torch.nn.Module):
         int8_module = W8A8B8O8Linear(
             module.in_features, module.out_features)
         int8_weight, weight_scale = quantize_per_tensor_absmax(module.weight)
-        # int8_bias, bias_scale should be 0, 0.0
         mockbias = torch.zeros((1, module.out_features), dtype=torch.int8, requires_grad=False)
         int8_bias, bias_scale = quantize_per_tensor_absmax(mockbias)
         alpha = input_scale * weight_scale / output_scale
@@ -86,6 +83,7 @@ class W8A8B8O8LinearWithSFactor(torch.nn.Module):
     def forward(self, x):
         x_shape = x.shape
         x = x.view(-1, x_shape[-1])
+        x = (x / self.inscale).round().clamp(-128, 127).to(torch.int8)
         y = linear_a8_w8_b8_o8(x, self.weight, self.bias,
                                self.a.item(), self.b.item())
         y = y.view(*x_shape[:-1], -1)
@@ -272,7 +270,6 @@ class W8A8BFP32OFP32Linear(torch.nn.Module):
         x_shape = x.shape
         x = x.view(-1, x_shape[-1])
         self.bias = self.bias.to(torch.float32)
-        # beta should be 1 ?
         y = linear_a8_w8_bfp32_ofp32(
             x, self.weight, self.bias, self.a.item(), 1)
         y = y.view(*x_shape[:-1], -1)
@@ -332,7 +329,6 @@ class W8A8BFP32OFP32LinearWithSFactor(torch.nn.Module):
         self.bias = self.bias.to(torch.float32)
         # quant here
         x = (x / self.inscale).round().clamp(-128, 127).to(torch.int8)
-        # beta should be 1 ?
         y = linear_a8_w8_bfp32_ofp32(
             x, self.weight, self.bias, self.a.item(), 1)
         y = y.view(*x_shape[:-1], -1)
