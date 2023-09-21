@@ -1,5 +1,9 @@
-from setuptools import setup, find_packages
+import torch
 from torch.utils import cpp_extension
+from setuptools import setup, find_packages
+
+compute_capability = torch.cuda.get_device_capability()
+cuda_arch = compute_capability[0] * 100 + compute_capability[1] * 10
 
 setup(
     name='torch_int',
@@ -12,12 +16,18 @@ setup(
                 'torch_int/kernels/fused.cu',
                 'torch_int/kernels/bindings.cpp',
             ],
-            include_dirs=['torch_int/kernels/include'],
+            include_dirs=['torch_int/kernels/include', 'submodules/cutlass/include', 'submodules/cutlass/tools/util/include'],
             extra_link_args=['-lcublas_static', '-lcublasLt_static',
                              '-lculibos', '-lcudart', '-lcudart_static',
                              '-lrt', '-lpthread', '-ldl', '-L/usr/lib/x86_64-linux-gnu/'],
             extra_compile_args={'cxx': ['-std=c++14', '-O3'],
-                                'nvcc': ['-O3', '-std=c++14', '-U__CUDA_NO_HALF_OPERATORS__', '-U__CUDA_NO_HALF_CONVERSIONS__', '-U__CUDA_NO_HALF2_OPERATORS__']},
+                                'nvcc': [
+                                    '-O3', '-std=c++14', 
+                                    '-U__CUDA_NO_HALF_OPERATORS__', 
+                                    '-U__CUDA_NO_HALF_CONVERSIONS__', 
+                                    '-U__CUDA_NO_HALF2_OPERATORS__', 
+                                    f'-DCUDA_ARCH={cuda_arch}'
+                                ]},
         ),
     ],
     cmdclass={
